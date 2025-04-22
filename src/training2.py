@@ -6,18 +6,15 @@ from PIL import Image
 
 
 def load_sentences(path: Path):
-    """Lädt eine Liste von Sätzen aus einer JSON-Datei."""
     return json.loads(path.read_text(encoding='utf-8'))
 
 
 def train_model(sentences):
-    """Trainiert ein Word2Vec-Modell auf den gegebenen Sätzen."""
     tokenized = [s.lower().split() for s in sentences]
     return Word2Vec(sentences=tokenized, vector_size=100, window=5, min_count=1, workers=4)
 
 
 def get_top_neighbors(model, word, topn=5):
-    """Gibt die topn ähnlichsten Wörter zu word zurück."""
     try:
         return model.wv.most_similar(word.lower(), topn=topn)
     except KeyError:
@@ -25,7 +22,6 @@ def get_top_neighbors(model, word, topn=5):
 
 
 def style_and_color(sim, src_id, tgt_id):
-    """Ermittelt Stil, Farbe und Dicke einer Kante basierend auf Score und Knoten-IDs."""
     src_word = src_id.split('_', 1)[1]
     tgt_word = tgt_id.split('_', 1)[1]
     style = 'solid' if sim > 0.10 else 'dotted'
@@ -44,11 +40,9 @@ def style_and_color(sim, src_id, tgt_id):
 
 
 def add_subgraph(g: Digraph, model: Word2Vec, targets, prefix: str):
-    """Fügt dem Graphen g einen Cluster mit Knoten und Kanten hinzu."""
     neighbors = {t.lower(): [n for n, _ in get_top_neighbors(model, t)] for t in targets}
     with g.subgraph(name=f"cluster_{prefix}") as c:
         c.attr(label=prefix, style='filled', color='lightgrey')
-        # Target-Knoten
         for t in targets:
             lower = t.lower(); node_id = f"{prefix}_{lower}"
             if lower == 'king':
@@ -57,7 +51,6 @@ def add_subgraph(g: Digraph, model: Word2Vec, targets, prefix: str):
                 c.node(node_id, label=t, shape='circle', style='filled', fillcolor='lightpink')
             else:
                 c.node(node_id, label=t, shape='circle')
-        # Kanten zu Nachbarn
         for t in targets:
             src_id = f"{prefix}_{t.lower()}"
             for neigh, sim in get_top_neighbors(model, t):
@@ -66,7 +59,6 @@ def add_subgraph(g: Digraph, model: Word2Vec, targets, prefix: str):
                 style, color, penwidth = style_and_color(sim, src_id, tgt_id)
                 c.edge(src_id, tgt_id, label=f"{sim:.2f}", style=style,
                        color=color, penwidth=penwidth, dir='both')
-        # Kanten unter Nachbarn
         all_neigh = set(sum(neighbors.values(), []))
         for n1 in sorted(all_neigh):
             for n2 in sorted(all_neigh):
@@ -85,29 +77,24 @@ def main():
         'tolkien': base / 'tolkien_sentences.json',
         'got': base / 'got_sentences.json',
     }
-    # Gemeinsamer Graph
     g = Digraph('combined', format='png')
-    g.attr(rankdir='TB')  # Vertikale Anordnung
+    g.attr(rankdir='TB')
 
-    # Einzelmodelle
     for prefix, path in files.items():
         sentences = load_sentences(path)
         model = train_model(sentences)
         add_subgraph(g, model, ['king', 'queen'], prefix)
 
-    # Kombiniertes Modell
     combined_sentences = []
     for path in files.values():
         combined_sentences.extend(load_sentences(path))
     combined_model = train_model(combined_sentences)
     add_subgraph(g, combined_model, ['king', 'queen'], 'combined')
 
-    # Unsichtbare Kanten zur vertikalen Ausrichtung
     order = list(files.keys()) + ['combined']
     for a, b in zip(order, order[1:]):
         g.edge(f"{a}_king", f"{b}_king", style='invis')
 
-    # Rendern und Anzeigen
     out = g.render('combined_graph', cleanup=True)
     Image.open(out).show()
 
