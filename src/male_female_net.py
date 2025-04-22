@@ -6,8 +6,6 @@ from sklearn.decomposition import PCA
 import numpy as np
 import warnings
 
-# ----------------------------------------------------------------------------
-# Configuration
 def get_config():
     return {
         "w2v_model_name": "fasttext-wiki-news-subwords-300",
@@ -20,11 +18,8 @@ def get_config():
         "color_male": "yellow",
         "color_same_pos": "skyblue",
         "color_diff_pos": "lightcoral",
-        "neutral_threshold": 0.025
+        "neutral_threshold": 0.04
     }
-
-# ----------------------------------------------------------------------------
-# Utility functions
 
 def configure_warnings():
     warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
@@ -37,23 +32,19 @@ def load_models(w2v_name, spacy_name):
     nlp = spacy.load(spacy_name, disable=["parser", "ner"])
     return w2v, nlp
 
-# Compute normalized gender direction (woman - man)
 def get_gender_direction(model):
     vec_w = model.get_vector("woman")
     vec_m = model.get_vector("man")
     d = vec_w - vec_m
     return d / np.linalg.norm(d)
 
-# POS tag a single token
 def get_pos(nlp, token):
     doc = nlp(token)
     return doc[0].pos_ if doc else "UNKNOWN"
 
-# Projection of vector on gender axis
 def gender_projection(vec, gender_dir):
     return float(np.dot(vec, gender_dir))
 
-# Find counterpart: invert gender and choose same-POS, opposite-projection word
 def find_counterpart(model, gender_dir, nlp, input_word, input_vec, input_proj, config):
     target_vec = input_vec - 2 * input_proj * gender_dir
     try:
@@ -73,7 +64,6 @@ def find_counterpart(model, gender_dir, nlp, input_word, input_vec, input_proj, 
             return cand
     return None
 
-# Build and plot a network of central word + neighbors
 def build_and_plot(ax, model, nlp, central, config, gender_dir):
     word = central.lower()
     vec = model.get_vector(word)
@@ -126,7 +116,6 @@ def build_and_plot(ax, model, nlp, central, config, gender_dir):
     nx.draw_networkx_labels(G, positions, labels, ax=ax, font_size=8)
     ax.axis('off')
 
-# Main execution
 if __name__ == '__main__':
     configure_warnings()
     config = get_config()
@@ -147,7 +136,6 @@ if __name__ == '__main__':
             continue
         counterpart = find_counterpart(w2v, gender_dir, nlp, word, input_vec, input_proj, config)
         if not counterpart:
-            # single plot with no counterpart
             fig, ax = plt.subplots(figsize=(7, 6))
             build_and_plot(ax, w2v, nlp, word, config, gender_dir)
             symbol = '♀' if is_female else '♂'
@@ -156,7 +144,6 @@ if __name__ == '__main__':
             plt.show()
             continue
 
-        # with counterpart
         vec_c = w2v.get_vector(counterpart)
         proj_c = gender_projection(vec_c, gender_dir)
         is_female_c = proj_c > config['neutral_threshold']
