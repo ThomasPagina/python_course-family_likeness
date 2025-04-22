@@ -22,7 +22,7 @@ def load_german_embedding_model(path="cc.de.300.vec.gz"):
         )
     return gensim.models.KeyedVectors.load_word2vec_format(path, binary=False)
 
-def gender_direction(model, source_gender="Masc"):
+def direction(model, source_gender="Masc"):
     return model["frau"] - model["mann"] if source_gender == "Masc" else model["mann"] - model["frau"]
 
 def get_article(token, target_gender):
@@ -46,10 +46,10 @@ def is_valid_candidate_word(word, original_word, avoid):
         len(word) > 2
     )
 
-def is_valid_noun(doc):
+def is_valid_word(doc):
     return doc and doc[0].pos_ == "NOUN"
 
-def get_valid_gender_candidate(model, original_word, direction, nlp, avoid={"frau", "mann"}, topn=20):
+def get_valid_candidate(model, original_word, direction, nlp, avoid={"frau", "mann"}, topn=20):
     try:
         orig_vec = model[original_word.lower()]
         new_vec = orig_vec + direction
@@ -57,13 +57,13 @@ def get_valid_gender_candidate(model, original_word, direction, nlp, avoid={"fra
         for word, score in candidates:
             if is_valid_candidate_word(word, original_word, avoid):
                 doc = nlp(word)
-                if is_valid_noun(doc):
+                if is_valid_word(doc):
                     return word, score, candidates
     except KeyError:
         pass
     return None, 0.0, []
 
-def build_highlighted_replacement(original_phrase, replacement):
+def build_hl_replacement(original_phrase, replacement):
     return HIGHLIGHT_TEMPLATE.format(replacement), original_phrase
 
 def build_explanation(original_phrase, replacement, score, all_candidates, nlp):
@@ -76,7 +76,7 @@ def build_explanation(original_phrase, replacement, score, all_candidates, nlp):
         if alt_word.lower() in {"frau", "mann"} or not alt_word.isalpha():
             continue
         alt_doc = nlp(alt_word)
-        if is_valid_noun(alt_doc):
+        if is_valid_word(alt_doc):
             explanation += CANDIDATE_LIST_ITEM.format(alt_word, alt_score)
             shown += 1
         if shown >= 3:
@@ -104,19 +104,19 @@ def generate_bias_suggestion(token, nlp, model, direction, target_gender):
     if not article:
         return None, None
 
-    guess, score, all_candidates = get_valid_gender_candidate(model, token.text, direction, nlp)
+    guess, score, all_candidates = get_valid_candidate(model, token.text, direction, nlp)
     if not guess:
         return None, None
 
     new_article = get_article(token, target_gender)
     original_phrase = f"{article} {token.text}"
     replacement = f"{article} {token.text} oder {new_article} {guess.capitalize()}"
-    highlighted_replacement, _ = build_highlighted_replacement(original_phrase, replacement)
+    highlighted_replacement, _ = build_hl_replacement(original_phrase, replacement)
     explanation = build_explanation(original_phrase, replacement, score, all_candidates, nlp)
 
     return original_phrase, (highlighted_replacement, explanation)
 
-def process_sentence(sent, nlp, model, direction_m2f, direction_f2m):
+def process(sent, nlp, model, direction_m2f, direction_f2m):
     modified_sent = sent.text
     explanations = []
 
@@ -148,13 +148,13 @@ def get_direction_and_target_gender(token, direction_m2f, direction_f2m):
 
 def process_text_to_html(text, nlp, model):
     doc = nlp(text)
-    direction_m2f = gender_direction(model, "Masc")
-    direction_f2m = gender_direction(model, "Fem")
+    direction_m2f = direction(model, "Masc")
+    direction_f2m = direction(model, "Fem")
 
     html_output = [HTML_HEADER]
 
     for sent in doc.sents:
-        modified_sent, explanations = process_sentence(sent, nlp, model, direction_m2f, direction_f2m)
+        modified_sent, explanations = process(sent, nlp, model, direction_m2f, direction_f2m)
         html_output.append(f"<p>{modified_sent}</p>")
         append_explanations(html_output, explanations)
 
