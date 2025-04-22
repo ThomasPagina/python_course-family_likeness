@@ -6,38 +6,22 @@ import matplotlib.pyplot as plt
 from sentence_transformers import SentenceTransformer
 import pandas as pd
 
-# ----------------------
-# Tokenization
-# ----------------------
 def simple_tokenize(text: str) -> list:
-    """Remove punctuation and split on whitespace."""
     clean = re.sub(r"[^\w\s]", "", text.lower())
     return clean.split()
 
-# ----------------------
-# Embedding
-# ----------------------
 def train_word2vec(sentences: list, window: int = 5, vector_size: int = 100) -> Word2Vec:
-    """Train a Word2Vec model on tokenized sentences."""
     tokenized = [simple_tokenize(s) for s in sentences]
     return Word2Vec(sentences=tokenized, vector_size=vector_size, window=window, min_count=1, workers=2)
 
-# ----------------------
-# Sentence Vector
-# ----------------------
 def sentence_vector(sentence: str, model: Word2Vec) -> np.ndarray:
-    """Compute sentence vector by averaging word vectors."""
     tokens = simple_tokenize(sentence)
     vecs = [model.wv[token] for token in tokens if token in model.wv]
     if not vecs:
         return np.zeros(model.vector_size)
     return np.mean(vecs, axis=0)
 
-# ----------------------
-# Evaluation
-# ----------------------
 def evaluate_model(model: Word2Vec, reference: str, test_sentences: list, test_target: str) -> tuple:
-    """Return (rank, score) of test_target within test_sentences by cosine similarity."""
     ref_vec = sentence_vector(reference, model)
     sims = [(s, 1 - cosine(ref_vec, sentence_vector(s, model))) for s in test_sentences]
     sims_sorted = sorted(sims, key=lambda x: x[1], reverse=True)
@@ -46,22 +30,14 @@ def evaluate_model(model: Word2Vec, reference: str, test_sentences: list, test_t
     score = dict(sims_sorted)[test_target]
     return rank, score
 
-# ----------------------
-# Strong Model Scoring
-# ----------------------
 def compute_strength_scores(sentences: list, reference: str, strong_model) -> dict:
-    """Compute similarity scores of sentences to reference using strong_model."""
     embeddings = strong_model.encode([reference] + sentences)
     ref_emb = embeddings[0]
     sent_embs = embeddings[1:]
     return {sent: np.dot(ref_emb, emb) / (np.linalg.norm(ref_emb) * np.linalg.norm(emb))
             for sent, emb in zip(sentences, sent_embs)}
 
-# ----------------------
-# Boosting Strategy
-# ----------------------
 def apply_boosting_strong(sentences: list, reference: str, strong_model, factor: float = 1.0) -> list:
-    """Boost sentences above mean by number proportional to (score - mean)/std * factor."""
     scores = compute_strength_scores(sentences, reference, strong_model)
     values = np.array(list(scores.values()))
     mean, std = values.mean(), values.std()
@@ -72,22 +48,14 @@ def apply_boosting_strong(sentences: list, reference: str, strong_model, factor:
             boosted.extend([sent] * times)
     return boosted
 
-# ----------------------
-# Reduction Strategy
-# ----------------------
 def apply_reduction_strong(sentences: list, reference: str, strong_model, threshold: float = None) -> list:
-    """Remove sentences with scores below (mean - std) or given threshold."""
     scores = compute_strength_scores(sentences, reference, strong_model)
     values = np.array(list(scores.values()))
     mean, std = values.mean(), values.std()
     cutoff = threshold if threshold is not None else mean - std
     return [s for s in sentences if scores[s] >= cutoff]
 
-# ----------------------
-# Doubling Strategy
-# ----------------------
 def apply_doubling(sentences: list, target_word: str, alt_word: str) -> list:
-    """Duplicate sentences replacing target_word with alt_word if not present."""
     new = sentences.copy()
     for sent in sentences:
         if target_word in simple_tokenize(sent):
@@ -96,11 +64,7 @@ def apply_doubling(sentences: list, target_word: str, alt_word: str) -> list:
                 new.append(replaced)
     return new
 
-# ----------------------
-# Phrase Swapping Strategy
-# ----------------------
 def apply_phrase_swapping(sentences: list, phrase_map: dict) -> list:
-    """Swap key phrases according to phrase_map, adding new variants if missing."""
     new = sentences.copy()
     for sent in sentences:
         for src, tgt in phrase_map.items():
@@ -110,15 +74,11 @@ def apply_phrase_swapping(sentences: list, phrase_map: dict) -> list:
                     new.append(replaced)
     return new
 
-# ----------------------
-# Experiment Runner
-# ----------------------
 def run_experiments(reference: str,
                     test_sentences: list,
                     test_target: str,
                     base_sets: dict,
                     strong_model_name: str = 'all-MiniLM-L6-v2') -> pd.DataFrame:
-    """Execute experiments with fixed window=5 and return DataFrame of results."""
     strong_model = SentenceTransformer(strong_model_name)
     results = []
     strategies = ['none', 'boosted', 'reduced', 'doubled', 'doubledoubled']
@@ -146,9 +106,6 @@ def run_experiments(reference: str,
 
     return pd.DataFrame(results)
 
-# ----------------------
-# Main
-# ----------------------
 def main():
     short_train = [
         "The happy child eats an apple.",
@@ -167,8 +124,6 @@ def main():
         "The big child is in the garden.",
         "Susan plays the guitar at school.",
         "A boy is playing with his sister.",
-     
-
     ]
     long1_train = [
         "A woman reads a book.",
@@ -208,7 +163,6 @@ def main():
         "The mother sees her child in the garden.",
         "The small child sits in the sun.",
         "The sun shines on the little child.",
-
     ]
     long2_train = [
         "A man jogs through the forest.",
@@ -275,22 +229,18 @@ def main():
 
     fig, axes = plt.subplots(3, 1, figsize=(12, 18), sharex=True)
 
-    # Rank plot
     axes[0].bar(df_results['label'], df_results['rank'], color='gray')
     axes[0].set_ylabel('Rank (lower is better)')
     axes[0].set_title('Ranking of Target Test Sentence')
 
-    # Similarity score plot
     axes[1].bar(df_results['label'], df_results['score'], color='blue')
     axes[1].set_ylabel('Cosine Similarity')
     axes[1].set_title('Similarity Score with Reference')
 
-    # Datasize distribution plot
     axes[2].bar(df_results['label'], df_results['datasize'], color='green')
     axes[2].set_ylabel('Datasize')
     axes[2].set_title('Datasize Distribution of Test Sentences')
 
-    # Shared x-axis labels
     plt.xticks(rotation=45, ha='right')
     plt.tight_layout()
     plt.show()
