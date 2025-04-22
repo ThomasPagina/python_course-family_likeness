@@ -116,7 +116,7 @@ def build_and_plot(ax, model, nlp, central, config, gender_dir):
     nx.draw_networkx_labels(G, positions, labels, ax=ax, font_size=8)
     ax.axis('off')
 
-if __name__ == '__main__':
+def main():
     configure_warnings()
     config = get_config()
     w2v, nlp = load_models(config['w2v_model_name'], config['spacy_model_name'])
@@ -159,3 +159,6 @@ if __name__ == '__main__':
 
         plt.tight_layout()
         plt.show()
+
+if __name__ == '__main__':
+    main()
