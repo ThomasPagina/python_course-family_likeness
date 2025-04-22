@@ -10,19 +10,19 @@ def load_model():
     print("Model loaded successfully.")
     return model
 
-def compute_bias_direction(model, word_pair):
+def compute_direction(model, word_pair):
     vec1 = model[word_pair[0].lower()]
     vec2 = model[word_pair[1].lower()]
     return vec1 - vec2
 
-def project_words(model, words, bias_directions):
+def project(model, words, bias_directions):
     word_vectors = np.array([model[word.lower()] for word in words])
     normed_directions = [vec / np.linalg.norm(vec) for vec in bias_directions]
     projections = np.array([[np.dot(vec, direction) for direction in normed_directions]
                             for vec in word_vectors])
     return projections, word_vectors
 
-def visualize_bias_interactive(words, projections, axis_labels, title):
+def visualize(words, projections, axis_labels, title):
     df = pd.DataFrame(projections, columns=axis_labels)
     df["word"] = words
 
@@ -88,8 +88,8 @@ def visualize_bias_interactive(words, projections, axis_labels, title):
 def main():
     model = load_model()
 
-    bias_rich_poor = compute_bias_direction(model, ("rich", "poor"))
-    bias_powerful_powerless = compute_bias_direction(model, ("powerful", "powerless"))
+    bias_money = compute_direction(model, ("rich", "poor"))
+    bias_powerful_powerless = compute_direction(model, ("powerful", "powerless"))
 
     words = [
         "lawyer", "janitor", "professor", "cashier", "artist", "banker",
@@ -97,13 +97,13 @@ def main():
         "manager", "clerk", "ceo", "farmer", "mechanic", "researcher"
     ]
 
-    projections, _ = project_words(model, words, [bias_rich_poor, bias_powerful_powerless])
+    projections, _ = project(model, words, [bias_money, bias_powerful_powerless])
 
     print("Word projections on bias axes ('rich−poor', 'powerful−powerless'):")
     for word, (rp_proj, pow_proj) in zip(words, projections):
         print(f"{word:12s} → rich-poor: {rp_proj:+.4f}, powerful-powerless: {pow_proj:+.4f}")
 
-    visualize_bias_interactive(
+    visualize(
         words,
         projections,
         axis_labels=["rich − poor", "powerful − powerless"],
